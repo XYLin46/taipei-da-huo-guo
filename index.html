@@ -9,6 +9,7 @@
  <canvas id="pot" aria-label="拖曳紅油，慢慢靠近其他油滴使它們合併"></canvas>
  <canvas id="pot-three" aria-label="Three.js 立體火鍋，拖曳紅油使它們合併" hidden></canvas>
  <div class="render-switch" role="group" aria-label="畫面模式"><button id="use-canvas" aria-pressed="true">Canvas 2D</button><button id="use-three" aria-pressed="false">Three.js 3D</button><span id="render-status" role="status">平面手繪</span></div>
+ <div class="difficulty-switch"><label for="difficulty">難度</label><select id="difficulty" aria-describedby="difficulty-note"><option value="easy">輕鬆 · 容易聚合</option><option value="hard">挑戰 · 容易分裂</option></select><span id="difficulty-note">原本手感，自在聚油</span></div>
  <section class="intro" id="intro"><span class="eyebrow">一鍋紅油，一點耐心。</span><h1>今晚，聚一鍋。</h1><p>按住紅油，慢慢靠向另一片。<br>手太快，暖意就散了。</p><button class="primary" id="start">開鍋 <span>↗</span></button><small>20 秒挑戰 · 滑鼠與觸控皆可遊玩</small></section>
  <section id="hud" hidden><div><span>聚合度</span><strong id="score">0%</strong></div><div><span>剩餘秒數</span><strong id="time">20.0</strong></div></section>
  <section class="result" id="result" hidden><span class="eyebrow">今夜的火候</span><h2 id="grade">小火慢聚</h2><strong id="final">0%</strong><p id="summary"></p><p class="record" id="record"></p><button class="primary" id="again">再煮一鍋 ↗</button></section>

@@ -2,20 +2,48 @@
 const canvas=document.querySelector('#pot'),ctx=canvas.getContext('2d');
 const $=id=>document.getElementById(id), TOTAL=70;
 let mode='canvas',threeView=null,loadingThree=false;
+const DIFFICULTIES={
+  easy:{label:'輕鬆',mergeRange:1.2,splitSpeed:2.5,minSplitMass:3,splitCooldown:.65},
+  hard:{label:'挑戰',mergeRange:.92,splitSpeed:.85,minSplitMass:2,splitCooldown:.85}
+};
+let difficulty='easy',dragSpeed=0;
+const contacts=new WeakMap();
+function settings(){return DIFFICULTIES[difficulty]}
+function recordKey(){return difficulty==='easy'?'taipei-hotpot-best':'taipei-hotpot-best-hard'}
+function difficultyNote(){return difficulty==='hard'?'慢慢接觸才合併，稍快就分裂':'原本手感，自在聚油'}
+$('difficulty').onchange=()=>{
+  if(running)return;
+  difficulty=$('difficulty').value==='hard'?'hard':'easy';
+  $('difficulty-note').textContent=difficultyNote();
+};
 let w,h,cx,cy,r,drops=[],running=false,left=20,last=0,drag=null,pt=null,splits=0,muted=true,audio;
 const mask=document.createElement('canvas'),mc=mask.getContext('2d');
 const decor=Array.from({length:55},()=>({a:Math.random()*Math.PI*2,d:Math.sqrt(Math.random())*.91,s:Math.random(),t:Math.random()*10}));
 function resize(){const d=Math.min(devicePixelRatio||1,2);w=innerWidth;h=innerHeight;canvas.width=w*d;canvas.height=h*d;ctx.setTransform(d,0,0,d,0,0);cx=w<700?w*.5:w*.66;cy=h*(w<700?.43:.53);r=Math.min(w*(w<700?.43:.31),h*.38);mask.width=480;mask.height=480;if(threeView)threeView.resize(w,h,cx,cy,r);}
 function seed(){drops=Array.from({length:TOTAL},()=>{const a=Math.random()*Math.PI*2,d=Math.sqrt(Math.random())*.83;return{x:Math.cos(a)*d,y:Math.sin(a)*d,vx:0,vy:0,m:1,phase:Math.random()*6.28,cool:0}});}
-function best(){try{return Number(localStorage.getItem('taipei-hotpot-best'))||0}catch{return 0}}
+function best(){try{return Number(localStorage.getItem(recordKey()))||0}catch{return 0}}
 function score(){return Math.round(Math.max(...drops.map(d=>d.m))/TOTAL*100)}
-function start(){seed();running=true;left=20;splits=0;drag=null;$('intro').hidden=true;$('result').hidden=true;$('hud').hidden=false;$('reset').hidden=false;$('hint').textContent='按住一片紅油，慢慢靠近另一片。';tone(330);}
-function finish(){running=false;drag=null;const s=score(),b=Math.max(best(),s);try{localStorage.setItem('taipei-hotpot-best',b)}catch{}$('hud').hidden=true;$('result').hidden=false;$('final').textContent=s+'%';$('grade').textContent=s>=80?'紅油大師':s>=45?'好一鍋人情味':s>=20?'漸入佳境':'小火慢聚';$('summary').textContent=`聚成 ${drops.length} 片紅油，分裂 ${splits} 次。`;$('record').textContent=`個人最佳 ${b}% · 慢一點，下鍋更有把握。`;tone(440);}
+function start(){seed();running=true;left=20;splits=0;drag=null;pt=null;dragSpeed=0;$('difficulty').disabled=true;$('difficulty-note').textContent='本局：'+settings().label+'（結束後可切換）';$('intro').hidden=true;$('result').hidden=true;$('hud').hidden=false;$('reset').hidden=false;$('hint').textContent='按住一片紅油，慢慢靠近另一片。';tone(330);}
+function finish(){running=false;drag=null;$('difficulty').disabled=false;$('difficulty-note').textContent=difficultyNote();const s=score(),b=Math.max(best(),s);try{localStorage.setItem(recordKey(),b)}catch{}$('hud').hidden=true;$('result').hidden=false;$('final').textContent=s+'%';$('grade').textContent=s>=80?'紅油大師':s>=45?'好一鍋人情味':s>=20?'漸入佳境':'小火慢聚';$('summary').textContent=`${settings().label}模式 · 聚成 ${drops.length} 片紅油，分裂 ${splits} 次。`;$('record').textContent=`${settings().label}最佳 ${b}% · 慢一點，下鍋更有把握。`;tone(440);}
 function tone(freq){if(muted)return;try{audio ||=new(window.AudioContext||window.webkitAudioContext)();audio.resume();const o=audio.createOscillator(),g=audio.createGain();o.type='sine';o.frequency.value=freq;o.connect(g);g.connect(audio.destination);g.gain.setValueAtTime(.06,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.22);o.start();o.stop(audio.currentTime+.23)}catch{}}
 function radius(d){return .043*Math.sqrt(d.m)}
-function update(dt,t){for(const d of drops){d.cool=Math.max(0,d.cool-dt);if(d!==drag){d.vx+=Math.sin(t*.6+d.phase)*.004*dt;d.vy+=Math.cos(t*.5+d.phase)*.004*dt;d.x+=d.vx*dt;d.y+=d.vy*dt;d.vx*=Math.exp(-2*dt);d.vy*=Math.exp(-2*dt)}const len=Math.hypot(d.x,d.y),limit=.94-radius(d);if(len>limit){d.x*=limit/len;d.y*=limit/len;d.vx*=-.3;d.vy*=-.3}}
+function update(dt,t){dragSpeed*=Math.exp(-10*dt);for(const d of drops){d.cool=Math.max(0,d.cool-dt);if(d!==drag){d.vx+=Math.sin(t*.6+d.phase)*.004*dt;d.vy+=Math.cos(t*.5+d.phase)*.004*dt;d.x+=d.vx*dt;d.y+=d.vy*dt;d.vx*=Math.exp(-2*dt);d.vy*=Math.exp(-2*dt)}const len=Math.hypot(d.x,d.y),limit=.94-radius(d);if(len>limit){d.x*=limit/len;d.y*=limit/len;d.vx*=-.3;d.vy*=-.3}}
 if(!running)return;
-for(let i=0;i<drops.length;i++)for(let j=i+1;j<drops.length;j++){let a=drops[i],b=drops[j];if(a.cool||b.cool)continue;if(Math.hypot(a.x-b.x,a.y-b.y)<(radius(a)+radius(b))*1.2){const m=a.m+b.m;a.x=(a.x*a.m+b.x*b.m)/m;a.y=(a.y*a.m+b.y*b.m)/m;a.m=m;if(drag===b)drag=a;drops.splice(j--,1);tone(180+Math.min(m,50)*8)}}
+for(let i=0;i<drops.length;i++)for(let j=i+1;j<drops.length;j++){
+  const a=drops[i],b=drops[j];
+  const touching=Math.hypot(a.x-b.x,a.y-b.y)<(radius(a)+radius(b))*settings().mergeRange;
+  if(difficulty==='hard'){
+    let pair=contacts.get(a);if(!pair){pair=new WeakMap();contacts.set(a,pair)}
+    const gentle=touching&&!a.cool&&!b.cool&&(a===drag||b===drag)&&dragSpeed<.55;
+    const time=gentle?(pair.get(b)||0)+dt:0;pair.set(b,time);
+    // Challenge mode requires a deliberate, gentle contact instead of chain merging.
+    if(time<.22)continue;
+  }else if(a.cool||b.cool||!touching)continue;
+  const m=a.m+b.m;a.x=(a.x*a.m+b.x*b.m)/m;a.y=(a.y*a.m+b.y*b.m)/m;a.m=m;
+  if(drag===b)drag=a;
+  if(difficulty==='hard')a.cool=.15;
+  drops.splice(j--,1);tone(180+Math.min(m,50)*8);
+}
 left=Math.max(0,left-dt);$('time').textContent=left.toFixed(1);$('score').textContent=score()+'%';if(left<=0||drops.length===1)finish();}
 function circle(x,y,rad,fill){ctx.beginPath();ctx.arc(x,y,rad,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill()}
 function draw(t){ctx.clearRect(0,0,w,h);ctx.save();ctx.translate(cx,cy);ctx.scale(r,r);
@@ -34,9 +62,26 @@ for(let i=0;i<2;i++){ctx.save();ctx.translate(.65+i*.075,-.62);ctx.rotate(.48);l
 ctx.restore();}
 function position(e){if(mode==='three')return threeView.position(e);return{x:(e.clientX-cx)/r,y:(e.clientY-cy)/r,t:performance.now()}}
 for(const surface of [canvas,$('pot-three')]){
-surface.addEventListener('pointerdown',e=>{if(!running)return;const p=position(e);if(!p)return;drag=drops.filter(d=>Math.hypot(p.x-d.x,p.y-d.y)<radius(d)+.055).sort((a,b)=>Math.hypot(p.x-a.x,p.y-a.y)-Math.hypot(p.x-b.x,p.y-b.y))[0]||null;pt=p;if(drag)surface.setPointerCapture(e.pointerId)});
-surface.addEventListener('pointermove',e=>{if(!drag||!running)return;const p=position(e);if(!p)return;const dt=Math.max(.016,(p.t-pt.t)/1000),speed=Math.hypot(p.x-pt.x,p.y-pt.y)/dt;drag.x=p.x;drag.y=p.y;if(speed>2.5&&drag.m>=3&&drag.cool<=0){const m=Math.floor(drag.m/2);drag.m-=m;drag.cool=.65;drops.push({x:p.x-.09,y:p.y+.08,vx:-.12,vy:.10,m,phase:Math.random()*6,cool:.65});splits++;$('hint').textContent='紅油散開了，手再慢一點。';tone(110)}else if(speed<1.5)$('hint').textContent='就是這個步調，慢慢聚。';pt=p});
-function release(){drag=null;pt=null}surface.addEventListener('pointerup',release);surface.addEventListener('pointercancel',release);}
+surface.addEventListener('pointerdown',e=>{if(!running)return;const p=position(e);if(!p)return;drag=drops.filter(d=>Math.hypot(p.x-d.x,p.y-d.y)<radius(d)+.055).sort((a,b)=>Math.hypot(p.x-a.x,p.y-a.y)-Math.hypot(p.x-b.x,p.y-b.y))[0]||null;pt=p;dragSpeed=0;if(drag)surface.setPointerCapture(e.pointerId)});
+surface.addEventListener('pointermove',e=>{
+  if(!drag||!running)return;const p=position(e);if(!p)return;
+  const dt=Math.max(.016,(p.t-pt.t)/1000),dx=p.x-pt.x,dy=p.y-pt.y,speed=Math.hypot(dx,dy)/dt;
+  dragSpeed=speed;drag.x=p.x;drag.y=p.y;
+  const rules=settings();
+  if(speed>rules.splitSpeed&&drag.m>=rules.minSplitMass&&drag.cool<=0){
+    const m=Math.floor(drag.m/2);drag.m-=m;drag.cool=rules.splitCooldown;
+    let x=p.x-.09,y=p.y+.08,vx=-.12,vy=.10;
+    if(difficulty==='hard'){
+      const length=Math.hypot(dx,dy)||1,nx=dx/length,ny=dy/length;
+      const separation=(radius(drag)+.043*Math.sqrt(m))*1.5;
+      x=p.x-nx*separation;y=p.y-ny*separation;vx=-nx*.35;vy=-ny*.35;
+    }
+    drops.push({x,y,vx,vy,m,phase:Math.random()*6,cool:rules.splitCooldown});
+    splits++;$('hint').textContent='紅油散開了，手再慢一點。';tone(110);
+  }else if(speed<(difficulty==='hard'?.55:1.5))$('hint').textContent='就是這個步調，慢慢聚。';
+  pt=p;
+});
+function release(){drag=null;pt=null;dragSpeed=0}surface.addEventListener('pointerup',release);surface.addEventListener('pointercancel',release);}
 $('start').onclick=start;$('again').onclick=start;$('reset').onclick=start;$('sound').onclick=()=>{muted=!muted;$('sound').textContent='音效 '+(muted?'關':'開');$('sound').setAttribute('aria-pressed',String(!muted));tone(330)};
 async function switchMode(next){
   if(loadingThree||next===mode)return;
