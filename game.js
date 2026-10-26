@@ -4,13 +4,12 @@ const $=id=>document.getElementById(id), TOTAL=70;
 let mode='canvas',threeView=null,loadingThree=false;
 const DIFFICULTIES={
   easy:{label:'輕鬆',mergeRange:1.2,splitSpeed:2.5,minSplitMass:3,splitCooldown:.65},
-  hard:{label:'挑戰',mergeRange:.92,splitSpeed:.85,minSplitMass:2,splitCooldown:.85}
+  hard:{label:'挑戰',mergeRange:1.05,splitSpeed:1.6,minSplitMass:3,splitCooldown:.55}
 };
 let difficulty='easy',dragSpeed=0;
-const contacts=new WeakMap();
 function settings(){return DIFFICULTIES[difficulty]}
 function recordKey(){return difficulty==='easy'?'taipei-hotpot-best':'taipei-hotpot-best-hard'}
-function difficultyNote(){return difficulty==='hard'?'挑戰：慢慢貼合，稍快就分裂':'輕鬆：原本手感，自在聚油'}
+function difficultyNote(){return difficulty==='hard'?'挑戰：輕推即合，快拉易散':'輕鬆：原本手感，自在聚油'}
 function chooseDifficulty(next){
   if(next===difficulty)return;
   const restart=running;
@@ -38,16 +37,12 @@ if(!running)return;
 for(let i=0;i<drops.length;i++)for(let j=i+1;j<drops.length;j++){
   const a=drops[i],b=drops[j];
   const touching=Math.hypot(a.x-b.x,a.y-b.y)<(radius(a)+radius(b))*settings().mergeRange;
-  if(difficulty==='hard'){
-    let pair=contacts.get(a);if(!pair){pair=new WeakMap();contacts.set(a,pair)}
-    const gentle=touching&&!a.cool&&!b.cool&&(a===drag||b===drag)&&dragSpeed<.55;
-    const time=gentle?(pair.get(b)||0)+dt:0;pair.set(b,time);
-    // Challenge mode requires a deliberate, gentle contact instead of chain merging.
-    if(time<.22)continue;
-  }else if(a.cool||b.cool||!touching)continue;
+  if(a.cool||b.cool||!touching)continue;
+  // Contact merges immediately at a controlled speed, without a dwell timer.
+  if(difficulty==='hard'&&(!(a===drag||b===drag)||dragSpeed>1.3))continue;
   const m=a.m+b.m;a.x=(a.x*a.m+b.x*b.m)/m;a.y=(a.y*a.m+b.y*b.m)/m;a.m=m;
   if(drag===b)drag=a;
-  if(difficulty==='hard')a.cool=.15;
+  if(difficulty==='hard')a.cool=.08;
   drops.splice(j--,1);tone(180+Math.min(m,50)*8);
 }
 left=Math.max(0,left-dt);$('time').textContent=left.toFixed(1);$('score').textContent=score()+'%';if(left<=0||drops.length===1)finish();}
@@ -84,7 +79,7 @@ surface.addEventListener('pointermove',e=>{
     }
     drops.push({x,y,vx,vy,m,phase:Math.random()*6,cool:rules.splitCooldown});
     splits++;$('hint').textContent='紅油散開了，手再慢一點。';tone(110);
-  }else if(speed<(difficulty==='hard'?.55:1.5))$('hint').textContent='就是這個步調，慢慢聚。';
+  }else if(speed<(difficulty==='hard'?1.3:1.5))$('hint').textContent='就是這個步調，慢慢聚。';
   pt=p;
 });
 function release(){drag=null;pt=null;dragSpeed=0}surface.addEventListener('pointerup',release);surface.addEventListener('pointercancel',release);}
