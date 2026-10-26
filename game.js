@@ -1,10 +1,11 @@
 'use strict';
 const canvas=document.querySelector('#pot'),ctx=canvas.getContext('2d');
 const $=id=>document.getElementById(id), TOTAL=70;
+let mode='canvas',threeView=null,loadingThree=false;
 let w,h,cx,cy,r,drops=[],running=false,left=20,last=0,drag=null,pt=null,splits=0,muted=true,audio;
 const mask=document.createElement('canvas'),mc=mask.getContext('2d');
 const decor=Array.from({length:55},()=>({a:Math.random()*Math.PI*2,d:Math.sqrt(Math.random())*.91,s:Math.random(),t:Math.random()*10}));
-function resize(){const d=Math.min(devicePixelRatio||1,2);w=innerWidth;h=innerHeight;canvas.width=w*d;canvas.height=h*d;ctx.setTransform(d,0,0,d,0,0);cx=w<700?w*.5:w*.66;cy=h*(w<700?.43:.53);r=Math.min(w*(w<700?.43:.31),h*.38);mask.width=480;mask.height=480;}
+function resize(){const d=Math.min(devicePixelRatio||1,2);w=innerWidth;h=innerHeight;canvas.width=w*d;canvas.height=h*d;ctx.setTransform(d,0,0,d,0,0);cx=w<700?w*.5:w*.66;cy=h*(w<700?.43:.53);r=Math.min(w*(w<700?.43:.31),h*.38);mask.width=480;mask.height=480;if(threeView)threeView.resize(w,h,cx,cy,r);}
 function seed(){drops=Array.from({length:TOTAL},()=>{const a=Math.random()*Math.PI*2,d=Math.sqrt(Math.random())*.83;return{x:Math.cos(a)*d,y:Math.sin(a)*d,vx:0,vy:0,m:1,phase:Math.random()*6.28,cool:0}});}
 function best(){try{return Number(localStorage.getItem('taipei-hotpot-best'))||0}catch{return 0}}
 function score(){return Math.round(Math.max(...drops.map(d=>d.m))/TOTAL*100)}
@@ -31,8 +32,34 @@ ctx.restore();ctx.strokeStyle='#e3d3a02b';ctx.lineWidth=.006;ctx.beginPath();ctx
 // Chopsticks rest across the rim.
 for(let i=0;i<2;i++){ctx.save();ctx.translate(.65+i*.075,-.62);ctx.rotate(.48);let g=ctx.createLinearGradient(0,0,.035,0);g.addColorStop(0,'#111510');g.addColorStop(.5,'#4b4c3d');g.addColorStop(1,'#141711');ctx.fillStyle=g;ctx.fillRect(0,-.93,.027,1.5);ctx.fillStyle='#c2a66a';ctx.fillRect(0,-.76,.027,.009);ctx.restore()}
 ctx.restore();}
-function position(e){return{x:(e.clientX-cx)/r,y:(e.clientY-cy)/r,t:performance.now()}}
-canvas.addEventListener('pointerdown',e=>{if(!running)return;const p=position(e);drag=drops.filter(d=>Math.hypot(p.x-d.x,p.y-d.y)<radius(d)+.055).sort((a,b)=>Math.hypot(p.x-a.x,p.y-a.y)-Math.hypot(p.x-b.x,p.y-b.y))[0]||null;pt=p;if(drag)canvas.setPointerCapture(e.pointerId)});
-canvas.addEventListener('pointermove',e=>{if(!drag||!running)return;const p=position(e),dt=Math.max(.016,(p.t-pt.t)/1000),speed=Math.hypot(p.x-pt.x,p.y-pt.y)/dt;drag.x=p.x;drag.y=p.y;if(speed>2.5&&drag.m>=3&&drag.cool<=0){const m=Math.floor(drag.m/2);drag.m-=m;drag.cool=.65;drops.push({x:p.x-.09,y:p.y+.08,vx:-.12,vy:.10,m,phase:Math.random()*6,cool:.65});splits++;$('hint').textContent='紅油散開了，手再慢一點。';tone(110)}else if(speed<1.5)$('hint').textContent='就是這個步調，慢慢聚。';pt=p});
-function release(){drag=null;pt=null}canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);$('start').onclick=start;$('again').onclick=start;$('reset').onclick=start;$('sound').onclick=()=>{muted=!muted;$('sound').textContent='音效 '+(muted?'關':'開');$('sound').setAttribute('aria-pressed',String(!muted));tone(330)};
-document.addEventListener('visibilitychange',()=>{last=0});window.addEventListener('resize',resize);resize();seed();function frame(ts){const dt=last?Math.min((ts-last)/1000,.05):0;last=ts;update(dt,ts/1000);draw(ts/1000);requestAnimationFrame(frame)}requestAnimationFrame(frame);
+function position(e){if(mode==='three')return threeView.position(e);return{x:(e.clientX-cx)/r,y:(e.clientY-cy)/r,t:performance.now()}}
+for(const surface of [canvas,$('pot-three')]){
+surface.addEventListener('pointerdown',e=>{if(!running)return;const p=position(e);if(!p)return;drag=drops.filter(d=>Math.hypot(p.x-d.x,p.y-d.y)<radius(d)+.055).sort((a,b)=>Math.hypot(p.x-a.x,p.y-a.y)-Math.hypot(p.x-b.x,p.y-b.y))[0]||null;pt=p;if(drag)surface.setPointerCapture(e.pointerId)});
+surface.addEventListener('pointermove',e=>{if(!drag||!running)return;const p=position(e);if(!p)return;const dt=Math.max(.016,(p.t-pt.t)/1000),speed=Math.hypot(p.x-pt.x,p.y-pt.y)/dt;drag.x=p.x;drag.y=p.y;if(speed>2.5&&drag.m>=3&&drag.cool<=0){const m=Math.floor(drag.m/2);drag.m-=m;drag.cool=.65;drops.push({x:p.x-.09,y:p.y+.08,vx:-.12,vy:.10,m,phase:Math.random()*6,cool:.65});splits++;$('hint').textContent='紅油散開了，手再慢一點。';tone(110)}else if(speed<1.5)$('hint').textContent='就是這個步調，慢慢聚。';pt=p});
+function release(){drag=null;pt=null}surface.addEventListener('pointerup',release);surface.addEventListener('pointercancel',release);}
+$('start').onclick=start;$('again').onclick=start;$('reset').onclick=start;$('sound').onclick=()=>{muted=!muted;$('sound').textContent='音效 '+(muted?'關':'開');$('sound').setAttribute('aria-pressed',String(!muted));tone(330)};
+async function switchMode(next){
+  if(loadingThree||next===mode)return;
+  if(next==='three'&&!threeView){
+    loadingThree=true;$('use-three').disabled=true;$('render-status').textContent='載入立體鍋…';
+    try{
+      const {createThreeView}=await import('./three-view.js');
+      threeView=createThreeView($('pot-three'),decor);threeView.resize(w,h,cx,cy,r);
+      // Render once before hiding the working Canvas view.
+      threeView.draw(drops,performance.now()/1000);
+    }catch(error){
+      console.error('Three.js unavailable:',error);threeView=null;
+      $('render-status').textContent='3D 無法啟用，請使用 Canvas';
+      loadingThree=false;$('use-three').disabled=false;return;
+    }
+    loadingThree=false;$('use-three').disabled=false;
+  }
+  drag=null;pt=null;mode=next;canvas.hidden=mode!=='canvas';$('pot-three').hidden=mode!=='three';
+  $('use-canvas').setAttribute('aria-pressed',String(mode==='canvas'));
+  $('use-three').setAttribute('aria-pressed',String(mode==='three'));
+  $('render-status').textContent=mode==='three'?'立體光影':'平面手繪';
+}
+$('use-canvas').onclick=()=>switchMode('canvas');$('use-three').onclick=()=>switchMode('three');
+document.addEventListener('visibilitychange',()=>{last=0});window.addEventListener('resize',resize);resize();seed();function frame(ts){const dt=last?Math.min((ts-last)/1000,.05):0;last=ts;update(dt,ts/1000);if(mode==='three')threeView.draw(drops,ts/1000);else draw(ts/1000);requestAnimationFrame(frame)}requestAnimationFrame(frame);
+if(new URLSearchParams(location.search).get('renderer')==='three')switchMode('three');
+
