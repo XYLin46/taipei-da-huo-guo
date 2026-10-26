@@ -10,12 +10,18 @@ let difficulty='easy',dragSpeed=0;
 const contacts=new WeakMap();
 function settings(){return DIFFICULTIES[difficulty]}
 function recordKey(){return difficulty==='easy'?'taipei-hotpot-best':'taipei-hotpot-best-hard'}
-function difficultyNote(){return difficulty==='hard'?'慢慢接觸才合併，稍快就分裂':'原本手感，自在聚油'}
-$('difficulty').onchange=()=>{
-  if(running)return;
-  difficulty=$('difficulty').value==='hard'?'hard':'easy';
+function difficultyNote(){return difficulty==='hard'?'挑戰：慢慢貼合，稍快就分裂':'輕鬆：原本手感，自在聚油'}
+function chooseDifficulty(next){
+  if(next===difficulty)return;
+  const restart=running;
+  difficulty=next;drag=null;pt=null;dragSpeed=0;
+  $('difficulty-easy').setAttribute('aria-pressed',String(next==='easy'));
+  $('difficulty-hard').setAttribute('aria-pressed',String(next==='hard'));
   $('difficulty-note').textContent=difficultyNote();
-};
+  if(restart){start();$('hint').textContent='已切換'+settings().label+'難度，重新開鍋！'}
+}
+$('difficulty-easy').onclick=()=>chooseDifficulty('easy');
+$('difficulty-hard').onclick=()=>chooseDifficulty('hard');
 let w,h,cx,cy,r,drops=[],running=false,left=20,last=0,drag=null,pt=null,splits=0,muted=true,audio;
 const mask=document.createElement('canvas'),mc=mask.getContext('2d');
 const decor=Array.from({length:55},()=>({a:Math.random()*Math.PI*2,d:Math.sqrt(Math.random())*.91,s:Math.random(),t:Math.random()*10}));
@@ -23,8 +29,8 @@ function resize(){const d=Math.min(devicePixelRatio||1,2);w=innerWidth;h=innerHe
 function seed(){drops=Array.from({length:TOTAL},()=>{const a=Math.random()*Math.PI*2,d=Math.sqrt(Math.random())*.83;return{x:Math.cos(a)*d,y:Math.sin(a)*d,vx:0,vy:0,m:1,phase:Math.random()*6.28,cool:0}});}
 function best(){try{return Number(localStorage.getItem(recordKey()))||0}catch{return 0}}
 function score(){return Math.round(Math.max(...drops.map(d=>d.m))/TOTAL*100)}
-function start(){seed();running=true;left=20;splits=0;drag=null;pt=null;dragSpeed=0;$('difficulty').disabled=true;$('difficulty-note').textContent='本局：'+settings().label+'（結束後可切換）';$('intro').hidden=true;$('result').hidden=true;$('hud').hidden=false;$('reset').hidden=false;$('hint').textContent='按住一片紅油，慢慢靠近另一片。';tone(330);}
-function finish(){running=false;drag=null;$('difficulty').disabled=false;$('difficulty-note').textContent=difficultyNote();const s=score(),b=Math.max(best(),s);try{localStorage.setItem(recordKey(),b)}catch{}$('hud').hidden=true;$('result').hidden=false;$('final').textContent=s+'%';$('grade').textContent=s>=80?'紅油大師':s>=45?'好一鍋人情味':s>=20?'漸入佳境':'小火慢聚';$('summary').textContent=`${settings().label}模式 · 聚成 ${drops.length} 片紅油，分裂 ${splits} 次。`;$('record').textContent=`${settings().label}最佳 ${b}% · 慢一點，下鍋更有把握。`;tone(440);}
+function start(){seed();running=true;left=20;splits=0;drag=null;pt=null;dragSpeed=0;$('difficulty-note').textContent=difficultyNote();$('intro').hidden=true;$('result').hidden=true;$('hud').hidden=false;$('reset').hidden=false;$('hint').textContent='按住一片紅油，慢慢靠近另一片。';tone(330);}
+function finish(){running=false;drag=null;$('difficulty-note').textContent=difficultyNote();const s=score(),b=Math.max(best(),s);try{localStorage.setItem(recordKey(),b)}catch{}$('hud').hidden=true;$('result').hidden=false;$('final').textContent=s+'%';$('grade').textContent=s>=80?'紅油大師':s>=45?'好一鍋人情味':s>=20?'漸入佳境':'小火慢聚';$('summary').textContent=`${settings().label}模式 · 聚成 ${drops.length} 片紅油，分裂 ${splits} 次。`;$('record').textContent=`${settings().label}最佳 ${b}% · 慢一點，下鍋更有把握。`;tone(440);}
 function tone(freq){if(muted)return;try{audio ||=new(window.AudioContext||window.webkitAudioContext)();audio.resume();const o=audio.createOscillator(),g=audio.createGain();o.type='sine';o.frequency.value=freq;o.connect(g);g.connect(audio.destination);g.gain.setValueAtTime(.06,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.22);o.start();o.stop(audio.currentTime+.23)}catch{}}
 function radius(d){return .043*Math.sqrt(d.m)}
 function update(dt,t){dragSpeed*=Math.exp(-10*dt);for(const d of drops){d.cool=Math.max(0,d.cool-dt);if(d!==drag){d.vx+=Math.sin(t*.6+d.phase)*.004*dt;d.vy+=Math.cos(t*.5+d.phase)*.004*dt;d.x+=d.vx*dt;d.y+=d.vy*dt;d.vx*=Math.exp(-2*dt);d.vy*=Math.exp(-2*dt)}const len=Math.hypot(d.x,d.y),limit=.94-radius(d);if(len>limit){d.x*=limit/len;d.y*=limit/len;d.vx*=-.3;d.vy*=-.3}}
